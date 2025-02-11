@@ -1,6 +1,5 @@
 import pygame
 import random
-import numpy as np
 pygame.init()
 
 #Screen set up
@@ -9,33 +8,32 @@ WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Tetris")
 #Frames
 FPS = 30
+MOVE_DOWN_DELAY = 15
 #Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GRAY = (211, 211, 211)
 RED = (255, 0, 0)
+CYAN = (0, 255, 255)
+YELLOW = (255, 255, 0)
+PURPLE = (128, 0, 128)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+ORANGE = (255, 165, 0)
 #Grid
 GRID_WIDTH, GRID_HEIGHT = 10, 20
 grid = [[0 for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
 #Cell
 CELL_SIZE = WIDTH//GRID_WIDTH
 #Blocks
-blocks_dict = {
-    "T": [[1, 1, 1], 
-          [0, 1, 0]], 
-    "O": [[1, 1], 
-          [1, 1]], 
-    "I": [[1, 1, 1, 1]], 
-    "S": [[0, 1, 1], 
-          [1, 1, 0]], 
-    "Z": [[1, 1, 0], 
-          [0, 1, 1]], 
-    "L": [[1, 0], 
-          [1, 0], 
-          [1, 1]], 
-    "J": [[0, 1], 
-          [0, 1], 
-          [1,1]]
+BLOCKS = {
+    "T": {"shape": [[1, 1, 1], [0, 1, 0]], "color": PURPLE}, 
+    "O": {"shape": [[1, 1], [1, 1]], "color": YELLOW},
+    "I": {"shape": [[1, 1, 1, 1]], "color": CYAN},
+    "S": {"shape": [[0, 1, 1], [1, 1, 0]], "color": GREEN},
+    "Z": {"shape": [[1, 1, 0], [0, 1, 1]], "color": RED},
+    "L": {"shape": [[1, 0], [1, 0], [1, 1]], "color": ORANGE},
+    "J": {"shape": [[0, 1], [0, 1], [1, 1]], "color": BLUE}
 }
 #Font
 FONT = pygame.font.SysFont("comicsans", 40)
@@ -44,7 +42,9 @@ FONT = pygame.font.SysFont("comicsans", 40)
 #Classes
 class Block:
     def __init__(self):
-        self.shape = random.choice(list(blocks_dict.values()))
+        self.type = random.choice(list(BLOCKS.keys()))
+        self.shape = BLOCKS[self.type]["shape"]
+        self.color = BLOCKS[self.type]["color"]
         self.x = 3
         self.y = 0
     def draw(self, win):
@@ -53,31 +53,35 @@ class Block:
                 if self.shape[row][col]:
                     x = (self.x + col) * CELL_SIZE
                     y = (self.y + row) * CELL_SIZE
-                    pygame.draw.rect(win, WHITE, (x, y, CELL_SIZE, CELL_SIZE))
-    def move_up(self):
-        self.y -= 1
-    def move_down(self):
+                    pygame.draw.rect(win, self.color, (x, y, CELL_SIZE, CELL_SIZE))
+    def move_down(self, grid):
         self.y += 1
+        if handle_collision(self, grid):
+            self.y -= 1
+            return False
+        return True
     def move_left(self):
         self.x -= 1
     def move_right(self):
         self.x +=1
-    def rotation(self, grid):
+    def rotate(self, grid):
         original_shape = self.shape
         original_x = self.x
         original_y = self.y
         #Rotates matrix
-        matrix = np.array(self.shape)
-        rotated = np.rot90(matrix, k=1)
-        self.shape = rotated.tolist()
+        rotated = list(zip(*self.shape[::-1]))
+        self.shape = [list(row) for row in rotated]
         #Checks for collision after rotation
-        if handle_collision(block, grid):
+        if handle_collision(self, grid):
             self.x += 1
-            if handle_collision(block, grid):
+            if handle_collision(self, grid):
                 self.x -= 2
-                if handle_collision(block, grid):
-                    self.x += 1
-                    self.shape = original_shape
+                if handle_collision(self, grid):
+                    self.y -= 1
+                    if handle_collision(self, grid):
+                        self.shape = original_shape
+                        self.x = original_x
+                        self.y = original_y
 
 #Functions
 #Rendering objects
@@ -96,10 +100,9 @@ def render_grid(win, grid):
         for col in range(GRID_WIDTH):
             x = col * CELL_SIZE
             y = row * CELL_SIZE
-            if grid[row][col] == 0:
-                pygame.draw.rect(win, BLACK, (x, y, CELL_SIZE, CELL_SIZE), 1)
-            else:
-                pygame.draw.rect(win, WHITE, (x, y, CELL_SIZE, CELL_SIZE))
+            if grid[row][col] != 0:
+                pygame.draw.rect(win, grid[row][col], (x, y, CELL_SIZE, CELL_SIZE))
+            pygame.draw.rect(win, GRAY, (x, y, CELL_SIZE, CELL_SIZE), 1)
         for col in range(GRID_WIDTH + 1):
             pygame.draw.line(win, GRAY, (col*CELL_SIZE, 0), (col*CELL_SIZE, HEIGHT))
         for row in range(GRID_HEIGHT + 1):
@@ -119,16 +122,9 @@ def handle_collision(block, grid):
     return False
 
 #Handles block movement
-def handle_block_movement(keys, block, grid):
+def handle_movement(block, grid, keys):
     if keys[pygame.K_DOWN]:
-        block.move_down()
-        if handle_collision(block, grid):
-            block.move_up()
-    if keys[pygame.K_UP]:
-        original_shape = block.shape
-        block.rotation(block, grid)
-        if handle_collision(block, grid):
-            block.shape = original_shape
+        block.move_down(grid)
     if keys[pygame.K_LEFT]:
         block.move_left()
         if handle_collision(block, grid):
@@ -146,14 +142,17 @@ def lock_block(block, grid):
                 x = block.x + col
                 y = block.y + row
                 if y >= 0:
-                    grid[y][x] = 1
+                    grid[y][x] = block.color
 
 #Clear full rows
 def clear_rows(grid):
+    #Creates a list
     rows_to_clear = []
+    #Checks for full rows and appends to the list
     for row in range(len(grid)):
         if all (grid[row]):
             rows_to_clear.append(row)
+    #Deletes rows in list and inserts a new row at the top of the grid
     for row in rows_to_clear:
         del grid[row]
         grid.insert(0, [0 for _ in range(GRID_WIDTH)])
@@ -161,48 +160,62 @@ def clear_rows(grid):
 
 #Main function of game
 def main():
+    #Initializes game main logic
     run = True
     game_over = False
     clock = pygame.time.Clock()
     #Block instance/creation and positioning
     block = Block()
     move_down_counter = 0
-    move_down_delay = 15
+    up_pressed = False
     
     #Main loop
     while run:
         clock.tick(FPS)
-        #Checks for closing tab
+        #Stores pressed keys in a variable
+        keys = pygame.key.get_pressed()
+        #Checks for events
         for event in pygame.event.get():
+            #Checks for closing tab
             if event.type == pygame.QUIT:
                 run = False
+            #Checks for a pressed key
+            elif event.type == pygame.KEYDOWN:
+                #Checks for type of key pressed
+                if event.key == pygame.K_UP and not up_pressed:
+                    up_pressed = True
+                    #Calls the rotate instance method
+                    block.rotate(grid)
+            #Checks for a released key
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_UP:
+                    up_pressed = False
+        #Calls the handle_movement function for the rest of keys being pressed during the game
+        handle_movement(block, grid, keys)
+        #Checks for game_over condition
         if not game_over:
-        #Handles a pressed key
-            keys = pygame.key.get_pressed()
-            handle_block_movement(keys, block, grid)
             #Moves blocks down automatically with a delay
             move_down_counter += 1
-            if move_down_counter >= move_down_delay:
+            if move_down_counter >= MOVE_DOWN_DELAY:
                 move_down_counter = 0
-                block.move_down()
                 #Checks for collisions, locks the block, deletes full rows, and spawns a new block
-                if handle_collision(block, grid):
-                    block.move_up()
+                if not block.move_down(grid):
                     lock_block(block, grid)
                     clear_rows(grid)
                     block = Block()
+                    #Checks for instant collision of a block after being spawned
                     if handle_collision(block, grid):
                         game_over = True
         #Draw game objects
         draw(WIN, grid, block)
-        #Checks for overlaping of blocks and displays "Game Over"
+        #Checks for overlapping of blocks and displays "Game Over"
         if game_over:
             text = FONT.render("Game Over", 1, RED)
             WIN.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - text.get_height()//2))
             pygame.display.update()
             pygame.time.delay(5000)
             run = False
-
+    #Closes the window
     pygame.quit()
                     
 
