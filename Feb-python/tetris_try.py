@@ -47,6 +47,7 @@ class Block:
         self.color = BLOCKS[self.type]["color"]
         self.x = 3
         self.y = 0
+    #Draws the instance based on its shape
     def draw(self, win):
         for row in range(len(self.shape)):
             for col in range(len(self.shape[row])):
@@ -54,6 +55,7 @@ class Block:
                     x = (self.x + col) * CELL_SIZE
                     y = (self.y + row) * CELL_SIZE
                     pygame.draw.rect(win, self.color, (x, y, CELL_SIZE, CELL_SIZE))
+    #Movement methods
     def move_down(self, grid):
         self.y += 1
         if handle_collision(self, grid):
@@ -64,6 +66,7 @@ class Block:
         self.x -= 1
     def move_right(self):
         self.x +=1
+    #Rotation method
     def rotate(self, grid):
         original_shape = self.shape
         original_x = self.x
@@ -103,6 +106,7 @@ def render_grid(win, grid):
             if grid[row][col] != 0:
                 pygame.draw.rect(win, grid[row][col], (x, y, CELL_SIZE, CELL_SIZE))
             pygame.draw.rect(win, GRAY, (x, y, CELL_SIZE, CELL_SIZE), 1)
+        #Renders gray lines for better visualization of grid
         for col in range(GRID_WIDTH + 1):
             pygame.draw.line(win, GRAY, (col*CELL_SIZE, 0), (col*CELL_SIZE, HEIGHT))
         for row in range(GRID_HEIGHT + 1):
@@ -123,12 +127,15 @@ def handle_collision(block, grid):
 
 #Handles block movement
 def handle_movement(block, grid, keys):
+    #Down arrow pressed
     if keys[pygame.K_DOWN]:
         block.move_down(grid)
+    #Left arrow pressed
     if keys[pygame.K_LEFT]:
         block.move_left()
         if handle_collision(block, grid):
-            block.move_right()         
+            block.move_right()
+    #Right arrow pressed        
     if keys[pygame.K_RIGHT]:
         block.move_right()
         if handle_collision(block, grid):
@@ -156,7 +163,6 @@ def clear_rows(grid):
     for row in rows_to_clear:
         del grid[row]
         grid.insert(0, [0 for _ in range(GRID_WIDTH)])
-
 
 #Main function of game
 def main():
